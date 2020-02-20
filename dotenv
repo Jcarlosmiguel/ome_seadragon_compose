@@ -1,0 +1,18 @@
+#Change <variables> with yours
+#and save the file as  .env
+OMEROPGDB=omero
+OMEROPGUSER=omero
+OMEROPGPASSWORD=<omeropgpassword>
+OMEROROOTPASSWORD=<omerorootpassword>
+GATEWAYPGUSER=ome_gw
+GATEWAYPGPASSWORD=<gatewaypassword>
+#the omerowebsite (for ssl as well)
+OMEROWEBSITE=<yourwebsite.com>
+OMESDPGPASSWORD=<omesdpgpassword>
+#The ome seadragon website (for ssl as well)
+OMESDWEBSITE=<yourwebsite-gw.com>
+#Email for ssl registration at letsencrypt
+EMAILSSL=<your.email@yourwebsite.com>
+
+
+

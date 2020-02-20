@@ -1,21 +1,27 @@
 version: '3'
 
 services:
-
+#Omero postgress database docker
   omero-db:
+    container_name:
+      omero-db
     image: postgres:9.6.12-alpine
     networks:
       ome_seadragon_env:
         aliases:
           - ome-pg-server
     environment:
-      - POSTGRES_DB=omero
-      - POSTGRES_USER=omero
-      - POSTGRES_PASSWORD=omero
+      - POSTGRES_DB=${OMEROPGDB}
+      - POSTGRES_USER=${OMEROPGUSER}
+      - POSTGRES_PASSWORD=${OMEROPGPASSWORD}
     volumes:
       - ome-pg-data:/var/lib/postgresql/data
-
+    restart:
+      always
+#Redis server docker
   redis-server:
+    container_name:
+      redis-server
     image: redis:5.0.5-alpine
     command: ["redis-server", "--appendonly", "yes"]
     networks:
@@ -24,8 +30,12 @@ services:
           - redis-server
     volumes:
       - redis-data:/data
-
+    restart:
+      always
+#Omero server docker
   omero-server:
+    container_name:
+      omero-server
     image: openmicroscopy/omero-server:5.5.1
     depends_on:
       - omero-db
@@ -37,16 +47,21 @@ services:
       - "4063:4063"
       - "4064:4064"
     environment:
-      - ROOTPASS=omero
+      - ROOTPASS=${OMEROROOTPASSWORD}
       - CONFIG_omero_db_host=ome-pg-server
-      - CONFIG_omero_db_user=omero
-      - CONFIG_omero_db_pass=omero
-      - CONFIG_omero_db_name=omero
+      - CONFIG_omero_db_user=${OMEROPGUSER}
+      - CONFIG_omero_db_pass=${OMEROPGPASSWORD}
+      - CONFIG_omero_db_name=${OMEROPGDB}
     volumes:
-      - ome-data-dir:/OMERO
+      # - ome-data-dir:/OMERO
+      - /mnt/OMERO:/OMERO
       - ome-server-var:/opt/omero/server/OMERO.server/var
-
+    restart:
+      always
+#Ome seadragon web docker
   ome_seadragon-web:
+    container_name:
+      ome_seadragon-web
     image: crs4/ome_seadragon-web:0.6.16-ome5.5.1
     depends_on:
       - omero-server
@@ -60,16 +75,22 @@ services:
         aliases:
           - ome_seadragon-web
     environment:
-      - ROOTPASS=omero
+      - ROOTPASS=${OMEROROOTPASSWORD}
       - OMEROHOST=omero-server
       - REDISHOST=redis-server
       - IMAGES_REPOSITORY=/OMERO/
-      - GW_USER_NAME=ome_gw
-      - GW_USER_PASS=omero
+      - GW_USER_NAME=${GATEWAYPGUSER}
+      - GW_USER_PASS=${GATEWAYPGPASSWORD}
     volumes:
-      - ome-data-dir:/OMERO
-
+      # - ome-data-dir:/OMERO
+      - /mnt/OMERO:/OMERO:ro
+      - /mnt/config/extra.omero://opt/omero/server/config/extra.omero:ro
+    restart:
+      always
+#Ome seadragon nginx webserver docker
   ome_seadragon-nginx:
+    container_name:
+      ome_seadragon-nginx
     image: crs4/ome_seadragon-nginx:0.6.16-ome5.5.1
     depends_on:
       - ome_seadragon-web
@@ -83,9 +104,14 @@ services:
           - ome-seadragon.local
     environment:
       - OMEROWEBHOST=ome_seadragon-web
-      - VIRTUAL_HOST=ome-seadragon.local
-
+      - VIRTUAL_HOST=${OMEROWEBSITE}
+      - LETSENCRYPT_HOST=${OMEROWEBSITE}
+    restart:
+      always
+#Ome seadragon gateway (with its own database) docker
   ome_seadragon_gw-db:
+    container_name:
+      ome_seadragon_gw-db
     image: postgres:9.6.12-alpine
     networks:
       ome_seadragon_env:
@@ -94,11 +120,15 @@ services:
     environment:
       - POSTGRES_DB=ome_seadragon_gw
       - POSTGRES_USER=ome_seadragon
-      - POSTGRES_PASSWORD=omero
+      - POSTGRES_PASSWORD=${OMESDPGPASSWORD}
     volumes:
       - ome-seadragon-gw-pg-data:/var/lib/postgresql/data
-
+    restart:
+      always
+#Ome seadragon gatweay django docker
   ome_seadragon_gw-web:
+    container_name:
+      ome_seadragon_gw-web
     image: crs4/ome_seadragon_gw-web:0.1.3
     depends_on:
       - ome_seadragon-nginx
@@ -116,8 +146,12 @@ services:
       - DJANGO_CONFIG_FILE=/opt/django/conf/config.yaml
     volumes:
       - ./ome_seadragon_gw_config/:/opt/django/conf/
-
+    restart:
+      always
+#Ome seadragon gateway webserver docker
   ome_seadragon_gw-nginx:
+    container_name:
+      ome_seadragon_gw-nginx
     image: crs4/ome_seadragon_gw-nginx:0.1.3
     depends_on:
       - ome_seadragon_gw-web
@@ -131,25 +165,67 @@ services:
           - ome-seadragon-gw.local
     environment:
       - DJANGO_SERVER=ome_seadragon_gw-web
-      - VIRTUAL_HOST=ome-seadragon-gw.local
-
+      - VIRTUAL_HOST=${OMESDWEBSITE}
+      - LETSENCRYPT_HOST=${OMESDWEBSITE}
+    restart:
+      always
+#Nginx proxy server docker  
   nginx-proxy:
-    image: jwilder/nginx-proxy
+    container_name: 
+      nginx-proxy
+    image: 
+      jwilder/nginx-proxy
     networks:
       ome_seadragon_env:
         aliases:
           - nginx-proxy
     ports:
       - "80:80"
+      - "443:443"
     volumes:
+      - nginx-proxy-conf:/etc/nginx/conf.d
+      - nginx-proxy-certs:/etc/nginx/certs:ro
+      - nginx-vhostd:/etc/nginx/vhost.d
+      - nginx-engine-html:/usr/share/nginx/html
+      - nginx-dhparam:/etc/nginx/dhparam
       - /var/run/docker.sock:/tmp/docker.sock:ro
-
+    restart:
+      always
+#Proxy letsencrypt addition
+  nginx-proxy-letsencrypt:
+    container_name: 
+      letsencrypt-companion
+    image: 
+      jrcs/letsencrypt-nginx-proxy-companion
+    depends_on:
+      - nginx-proxy
+    networks:
+      ome_seadragon_env:
+        aliases:
+          - nginx-proxy-letsencrypt
+    volumes:
+      - nginx-proxy-conf:/etc/nginx/conf.d
+      - nginx-proxy-certs:/etc/nginx/certs:rw
+      - nginx-vhostd:/etc/nginx/vhost.d
+      - nginx-engine-html:/usr/share/nginx/html
+      - nginx-dhparam:/etc/nginx/dhparam
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DEFAULT_EMAIL=${EMAILSSL}
+      - NGINX_PROXY_CONTAINER=nginx-proxy
+    restart: 
+      always
+#End of containers session
 volumes:
   ome-pg-data: null
   ome-seadragon-gw-pg-data: null
   ome-server-var: null
-  ome-data-dir: null
+  # ome-data-dir: null
   redis-data: null
-
+  nginx-proxy-conf: null
+  nginx-proxy-certs: null
+  nginx-vhostd: null
+  nginx-engine-html: null
+  nginx-dhparam: null
 networks:
   ome_seadragon_env: null
