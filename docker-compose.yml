@@ -5,7 +5,7 @@ services:
   omero-db:
     container_name:
       omero-db
-    image: postgres:9.6.12-alpine
+    image: postgres:10-alpine
     networks:
       ome_seadragon_env:
         aliases:
@@ -16,6 +16,8 @@ services:
       - POSTGRES_PASSWORD=${OMEROPGPASSWORD}
     volumes:
       - ome-pg-data:/var/lib/postgresql/data
+     # External postgres backup folder 
+      - /mnt/db-backup:/mnt/db-backup
     restart:
       always
 #Redis server docker
@@ -36,7 +38,7 @@ services:
   omero-server:
     container_name:
       omero-server
-    image: openmicroscopy/omero-server:5.5.1
+    image: openmicroscopy/omero-server:5.6
     depends_on:
       - omero-db
     networks:
@@ -53,8 +55,10 @@ services:
       - CONFIG_omero_db_pass=${OMEROPGPASSWORD}
       - CONFIG_omero_db_name=${OMEROPGDB}
     volumes:
-      # - ome-data-dir:/OMERO
+      # External omero data
       - /mnt/OMERO:/OMERO
+      # External omero server configurations (read-only)
+      - /mnt/omero_config/extra.omero:/opt/omero/server/config/extra.omero:ro
       - ome-server-var:/opt/omero/server/OMERO.server/var
     restart:
       always
@@ -82,9 +86,10 @@ services:
       - GW_USER_NAME=${GATEWAYPGUSER}
       - GW_USER_PASS=${GATEWAYPGPASSWORD}
     volumes:
-      # - ome-data-dir:/OMERO
+      # External omero data (read-only)
       - /mnt/OMERO:/OMERO:ro
-      - /mnt/config/extra.omero://opt/omero/server/config/extra.omero:ro
+      # external omero server configurations (read-only
+      - /mnt/omero_config/extra.omero:/opt/omero/server/config/extra.omero:ro
     restart:
       always
 #Ome seadragon nginx webserver docker
@@ -112,7 +117,7 @@ services:
   ome_seadragon_gw-db:
     container_name:
       ome_seadragon_gw-db
-    image: postgres:9.6.12-alpine
+    image: postgres:10-alpine
     networks:
       ome_seadragon_env:
         aliases:
@@ -123,6 +128,8 @@ services:
       - POSTGRES_PASSWORD=${OMESDPGPASSWORD}
     volumes:
       - ome-seadragon-gw-pg-data:/var/lib/postgresql/data
+     # External postgres backup folder 
+      - /mnt/db-backup:/mnt/db-backup
     restart:
       always
 #Ome seadragon gatweay django docker
@@ -183,6 +190,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+     # External nginx config backup folder 
+      - /mnt/nginx-backup:/mnt/nginx-backup
       - nginx-proxy-conf:/etc/nginx/conf.d
       - nginx-proxy-certs:/etc/nginx/certs:ro
       - nginx-vhostd:/etc/nginx/vhost.d

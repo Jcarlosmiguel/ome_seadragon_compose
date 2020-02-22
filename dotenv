@@ -1,5 +1,4 @@
 #Change <variables> with yours
-#and save the file as  .env
 OMEROPGDB=omero
 OMEROPGUSER=omero
 OMEROPGPASSWORD=<omeropgpassword>
